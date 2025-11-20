@@ -1,5 +1,4 @@
 // server.js
-// server.js
 import 'dotenv/config';
 import fs from 'fs';
 import express from 'express';
@@ -87,16 +86,36 @@ app.post('/api/portfolio-guide', async (req, res) => {
   try {
     const { message = '', history = [] } = req.body || {};
 
-    const context = await getRelevantContext(message);
+    const context = await getRelevantContext(
+      `User question: ${message}
+       Focus on Cam's experience, roles, industries, design methods, case studies, and results.
+      `
+    );
 
-    const systemPrompt = `
-You are "Cam's portfolio guide", an AI assistant that answers questions ONLY about product designer Cameron Merriwether and his work.
+    const systemPrompt = `You are Cam’s Portfolio Guide — an expert assistant whose only job is to explain the product design work, experience, and capabilities of senior product designer Cameron Merriwether.
 
-Assume that "Cam", "Cameron", or "he" ALWAYS refer to this same person: the owner of camjmerriwether.com. Do NOT ask which Cam the user means.
+ASSUME the following:
+- “Cam”, “Cameron”, and “he” always refer to the owner of camjmerriwether.com.
+- The user is often a recruiter, hiring manager, or collaborator evaluating Cam’s skills.
+- You must answer confidently using the context from the website and embeddings.
+- If something is unclear, infer the most reasonable answer using available context.
 
-You must base your answers ONLY on the website context provided. If the answer is not clearly supported by the context, say you are not sure and suggest where the user can look on the site (for example: specific case studies, About page, or resume).
+YOUR BEHAVIOR:
+- Be clear, concise, and specific — no generic statements.
+- Surface relevant details from context: industries, case studies, roles, methods, outcomes.
+- Emphasize Cam’s strengths in designing complex systems, design systems, interaction design, AI-assisted UX, fintech, sports, edtech, and enterprise workflows.
+- When users ask “Has Cam worked with X?”, always check context first. If the experience exists anywhere in the embedding chunks, reference it confidently.
+- If context is missing, say what is known AND where on the site the user can look (About page, Case Studies, Work Experience, Resume PDF).
+- Never ask “Which Cam?” or imply uncertainty about his identity.
+- Never invent facts not in context — stay grounded.
 
-Be concise, specific, and focused on his product design experience, skills, industries (like fintech, sports, etc.), and project outcomes.
+FORMAT:
+1. Start with a direct answer.
+2. Follow with supporting evidence from the context.
+3. Offer an optional related detail (e.g., another relevant project or capability).
+
+Tone:
+Professional, precise, friendly — like a knowledgeable teammate explaining Cam’s work.
 `;
 
     const messages = [
@@ -113,6 +132,13 @@ Be concise, specific, and focused on his product design experience, skills, indu
       messages.push({ role: 'assistant', content: turn.assistant });
     }
 
+    // anchor conversation behavior
+    messages.unshift({
+      role: 'system',
+      content:
+        'Conversation context: Use recent user history to maintain continuity, but always anchor your answers to the website knowledge base.'
+    });
+
     messages.push({ role: 'user', content: message });
 
     const completion = await client.chat.completions.create({
@@ -121,12 +147,20 @@ Be concise, specific, and focused on his product design experience, skills, indu
       temperature: 0.4
     });
 
+    // 🔽 THIS IS THE PART YOU ASKED ABOUT 🔽
     const reply = completion.choices[0].message.content;
-    res.json({ reply });
+
+    const evidenceNote = context
+      ? `\n\n(Answer based on content from Cam’s portfolio and case studies.)`
+      : ``;
+
+    res.json({ reply: reply + evidenceNote });
+    // 🔼 END OF INSERTED BLOCK 🔼
+
   } catch (error) {
     console.error('ERROR in /api/portfolio-guide:', error);
     res.status(500).json({
-      reply: "Sorry, the portfolio guide ran into a server error. Try again in a bit."
+      reply: 'Sorry, the portfolio guide ran into a server error. Try again in a bit.'
     });
   }
 });
